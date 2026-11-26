@@ -1,0 +1,57 @@
+name: Build NESCRUN v2 (VST3 + CLAP)
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ordenar archivos
+        shell: pwsh
+        run: |
+          if (!(Test-Path Source)) {
+            New-Item -ItemType Directory -Force Source/DSP | Out-Null
+            Move-Item PluginProcessor.cpp,PluginProcessor.h,PluginEditor.cpp,PluginEditor.h,Params.h,Presets.h,LookAndFeel.h Source/
+            Move-Item PitchCorrector.h,ResonanceSuppressor.h,Dynamics.h,ToneFX.h,SpaceFX.h Source/DSP/
+          }
+          if (!(Select-String -Path CMakeLists.txt -Pattern "clap.cmake" -Quiet)) { Add-Content CMakeLists.txt "`ninclude(clap.cmake)" }
+
+      - name: Configure
+        run: cmake -B build -A x64
+
+      - name: Build VST3 + CLAP + Standalone
+        run: cmake --build build --config Release --parallel 4 --target NESCRUN_VST3 NESCRUN_CLAP NESCRUN_Standalone
+
+      - name: Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item -Recurse "build/NESCRUN_artefacts/Release/VST3/NESCRUN.vst3" dist/
+          Copy-Item "build/NESCRUN_artefacts/Release/CLAP/NESCRUN.clap" dist/
+          Copy-Item "build/NESCRUN_artefacts/Release/Standalone/NESCRUN.exe" dist/
+          Copy-Item INSTALAR.txt dist/
+          Compress-Archive -Path dist/* -DestinationPath NESCRUN-Windows-x64.zip -Force
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: NESCRUN-Windows-x64
+          path: NESCRUN-Windows-x64.zip
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v2.0.${{ github.run_number }}
+          name: NESCRUN v2.0.${{ github.run_number }} (VST3 + CLAP)
+          body: |
+            Plugin para Windows en formato VST3 y CLAP (FL Studio 2025 reconoce CLAP).
+          files: NESCRUN-Windows-x64.zip
+          make_latest: true
