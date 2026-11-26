@@ -24,7 +24,7 @@ jobs:
           }
 
       - name: Configure
-        run: cmake  -A x64
+        run: cmake -B build -A x64
 
       - name: Build VST3 + Standalone
         run: cmake --build build --config Release --parallel 4 --target NESCRUN_VST3 NESCRUN_Standalone
