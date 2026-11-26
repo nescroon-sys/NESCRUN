@@ -1,0 +1,55 @@
+name: Build NESCRUN (Windows VST3)
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ordenar archivos
+        shell: pwsh
+        run: |
+          if (!(Test-Path Source)) {
+            New-Item -ItemType Directory -Force Source/DSP | Out-Null
+            Move-Item PluginProcessor.cpp,PluginProcessor.h,PluginEditor.cpp,PluginEditor.h,Params.h,Presets.h,LookAndFeel.h Source/
+            Move-Item PitchCorrector.h,ResonanceSuppressor.h,Dynamics.h,ToneFX.h,SpaceFX.h Source/DSP/
+          }
+
+      - name: Configure
+        run: cmake -B build -G "Visual Studio 17 2022" -A x64
+
+      - name: Build VST3 + Standalone
+        run: cmake --build build --config Release --parallel 4 --target NESCRUN_VST3 NESCRUN_Standalone
+
+      - name: Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item -Recurse "build/NESCRUN_artefacts/Release/VST3/NESCRUN.vst3" dist/
+          Copy-Item "build/NESCRUN_artefacts/Release/Standalone/NESCRUN.exe" dist/
+          Copy-Item INSTALAR.txt dist/
+          Compress-Archive -Path dist/* -DestinationPath NESCRUN-Windows-x64.zip -Force
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: NESCRUN-Windows-x64
+          path: NESCRUN-Windows-x64.zip
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: NESCRUN v1.0.${{ github.run_number }}
+          body: |
+            Plugin VST3 para Windows. Descarga NESCRUN-Windows-x64.zip y segui INSTALAR.txt.
+          files: NESCRUN-Windows-x64.zip
+          make_latest: true
